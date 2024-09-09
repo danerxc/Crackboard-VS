@@ -20,7 +20,7 @@ Crackboard is a leaderboard productivity tracker for tpot.
 
 there are two ways that you can install the extension.
 
-1. Download the extension from the Visual Studio Marketplace: 
+~~1. Download the extension from the Visual Studio Marketplace:~~ IN REVIEW
 
 2. Download the VSIX Installer package from [releases](https://github.com/danexrc/Crackboard-VS/releases) & run to install.
 
