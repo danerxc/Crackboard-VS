@@ -12,7 +12,7 @@
 
 ## About the Project
 
-This is an (unofficial) extension for Visual Studio to interact with https://crackboard.dev by [@boganworld](https://github.com/boganworld)
+This is an (unofficial) extension for Visual Studio to interact with https://crackboard.dev by [@BoganPragmatist](https://x.com/BoganPragmatist)
 
 Crackboard is a leaderboard productivity tracker for tpot.
 
