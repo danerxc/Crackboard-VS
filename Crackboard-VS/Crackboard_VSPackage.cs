@@ -48,11 +48,9 @@ namespace Crackboard_VS
 
             Console.WriteLine($"Language of active document is: {_dte.ActiveDocument.Language}");
 
-            // Initialize and register IVsRunningDocTableEvents3 for document save events
             _runningDocTable = new RunningDocumentTable(this);
             _rdtCookie = _runningDocTable.Advise(this);
 
-            // Hook up TextEditorEvents for text changes
             var textEditorEvents = _dte.Events.TextEditorEvents;
             textEditorEvents.LineChanged += OnLineChanged;
         }
@@ -68,6 +66,7 @@ namespace Crackboard_VS
             base.Dispose(disposing);
         }
 
+        // Event handler for document save
         public int OnBeforeSave(uint docCookie)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -100,37 +99,42 @@ namespace Crackboard_VS
 
         private void OnLineChanged(TextPoint startPoint, TextPoint endPoint, int hint)
         {
-            if (_typingTimer != null)
+            if (_typingTimer == null)
             {
-                _typingTimer.Dispose();
-            }
+                _lastHeartbeatTime = DateTime.UtcNow;
 
-            _typingTimer = new Timer(_ =>
-            {
-                Task.Run(async () =>
+                _typingTimer = new Timer(_ =>
                 {
-                    try
+                    Task.Run(async () =>
                     {
-                        await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
-                        if (DateTime.UtcNow.Subtract(_lastHeartbeatTime).TotalMinutes >= 2)
+                        try
                         {
-                            string vsLanguage = _dte.ActiveDocument?.Language;
-                            string mappedLanguage = ConvertLanguageMapping(vsLanguage); // Convert to VS Code language format
-                            if (!string.IsNullOrEmpty(mappedLanguage))
+                            await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+
+                            // Check if 2 minutes have passed since the last heartbeat
+                            
+                            if (DateTime.UtcNow.Subtract(_lastHeartbeatTime).TotalMinutes >= 2)
                             {
-                                await SendHeartbeatAsync(mappedLanguage);
+                                string vsLanguage = _dte.ActiveDocument?.Language;
+                                string mappedLanguage = ConvertLanguageMapping(vsLanguage);
+                                if (!string.IsNullOrEmpty(mappedLanguage))
+                                {
+                                    await SendHeartbeatAsync(mappedLanguage);
+                                    _lastHeartbeatTime = DateTime.UtcNow;  // Update the last heartbeat time
+                                }
                             }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Handle exceptions safely
-                        Console.WriteLine($"Error in Timer callback: {ex.Message}");
-                    }
-                });
-            }, null, TimeSpan.FromMinutes(2), Timeout.InfiniteTimeSpan);
+                        catch (Exception ex)
+                        {
+                            // Handle exceptions safely
+                            Console.WriteLine($"Error in Timer callback: {ex.Message}");
+                        }
+                    });
+                }, null, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2));  // Check every 2 minutes
+            }
         }
 
+        // Finds currently open document by cookie
         private Document FindDocumentByCookie(uint docCookie)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -142,6 +146,7 @@ namespace Crackboard_VS
             });
         }
 
+        // Sends a heartbeat to the Crackboard endpoint
         private async Task SendHeartbeatAsync(string language)
         {
             if (string.IsNullOrEmpty(_sessionKey))
@@ -181,12 +186,14 @@ namespace Crackboard_VS
             }
         }
 
+        // Gets the session key from the options page settings
         private string GetSessionKey()
         {
             OptionsPageGrid optionsPage = (OptionsPageGrid)GetDialogPage(typeof(OptionsPageGrid));
-            return optionsPage.SessionKey;
+            return optionsPage.GetSessionKey();
         }
 
+        // Dictionary to map common Visual Studio language names to Crackboard (VS Code) language names
         private static readonly Dictionary<string, string> LanguageMapDictionary = new Dictionary<string, string>
         {
             { "CSharp", "csharp" },
@@ -203,6 +210,8 @@ namespace Crackboard_VS
             { "Java", "java" },
         };
 
+        // Converts Visual Studio language names to Crackboard (VS Code) language names
+        // Returns current language as lowercase if no mapping is found
         private string ConvertLanguageMapping(string vsLanguage)
         {
             if (LanguageMapDictionary.TryGetValue(vsLanguage, out string mappedLanguage))

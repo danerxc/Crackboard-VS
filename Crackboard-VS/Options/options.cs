@@ -8,13 +8,10 @@ namespace Crackboard_VS.options
     {
         private string sessionKey = string.Empty;
 
-        [Category("Crackboard")]
-        [DisplayName("Session Key")]
-        [Description("The session key used for authentication.")]
-        public string SessionKey
-        {
-            get { return sessionKey; }
-            set { sessionKey = value; }
-        }
+        public string GetSessionKey()
+        { return sessionKey; }
+
+        public void SetSessionKey(string value)
+        { sessionKey = value; }
     }
 }
