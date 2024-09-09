@@ -190,7 +190,7 @@ namespace Crackboard_VS
         private string GetSessionKey()
         {
             OptionsPageGrid optionsPage = (OptionsPageGrid)GetDialogPage(typeof(OptionsPageGrid));
-            return optionsPage.GetSessionKey();
+            return optionsPage.SessionKey;
         }
 
         // Dictionary to map common Visual Studio language names to Crackboard (VS Code) language names
