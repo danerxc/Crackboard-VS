@@ -35,5 +35,6 @@ When first opening the project you will need to input your session key from crac
 4. In Visual Studio, navigate to **Tools > Options**
 5. Find "Crackboard" in the options list, and paste your key into the "Session Key" field.
 ![Enter Session Key](https://i.imgur.com/jhCcYfH.png)
-6. Click OK to save - your progress will now begin sending to Crackboard
+6. Click OK to save - you will need to restart Visual Studio for the updates to take effect.
+7. Your progress will now be being sent to Crackboard!
 
