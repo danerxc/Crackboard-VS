@@ -46,8 +46,6 @@ namespace Crackboard_VS
                 Console.WriteLine("Session key not set. Please configure it in the options.");
             }
 
-            Console.WriteLine($"Language of active document is: {_dte.ActiveDocument.Language}");
-
             _runningDocTable = new RunningDocumentTable(this);
             _rdtCookie = _runningDocTable.Advise(this);
 
