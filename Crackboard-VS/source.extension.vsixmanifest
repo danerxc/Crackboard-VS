@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
 	<Metadata>
-		<Identity Id="Crackboard_VS.2817f103-f558-4681-b1be-19759908d9dd" Version="1.1" Language="en-US" Publisher="danexrc" />
+		<Identity Id="Crackboard_VS.2817f103-f558-4681-b1be-19759908d9d2" Version="1.1" Language="en-US" Publisher="danexrc" />
 		<DisplayName> Crackboard (VS)</DisplayName>
 		<Description xml:space="preserve">An (unofficial) extension to interface with crackboard.dev for Visual Studio.</Description>
 		<MoreInfo>https://github.com/danexrc/Crackboard-VS</MoreInfo>
