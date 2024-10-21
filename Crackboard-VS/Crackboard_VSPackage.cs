@@ -25,11 +25,13 @@ namespace Crackboard_VS
         public const string PackageGuidString = "2817f103-f558-4681-b1be-19759908d9dd";
         private static readonly string Endpoint = "http://crackboard.dev/heartbeat";
         private DTE _dte;
-        private Timer _typingTimer;
         private DateTime _lastHeartbeatTime;
+        private DateTime _lastActivityTime;
         private string _sessionKey;
         private RunningDocumentTable _runningDocTable;
         private uint _rdtCookie;
+        private Timer _idleTimer;
+        private const int HEARTBEAT_INTERVAL = 2 * 60 * 1000;
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
@@ -38,7 +40,6 @@ namespace Crackboard_VS
             _dte = (DTE)await GetServiceAsync(typeof(DTE));
             if (_dte == null) return;
 
-            // Load session key from the options page settings
             _sessionKey = GetSessionKey();
 
             if (string.IsNullOrEmpty(_sessionKey))
@@ -51,6 +52,10 @@ namespace Crackboard_VS
 
             var textEditorEvents = _dte.Events.TextEditorEvents;
             textEditorEvents.LineChanged += OnLineChanged;
+
+            _lastActivityTime = DateTime.UtcNow;
+            _lastHeartbeatTime = DateTime.UtcNow;
+            _idleTimer = new Timer(CheckIdleAndSendHeartbeat, null, HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL);
         }
 
         protected override void Dispose(bool disposing)
@@ -61,13 +66,15 @@ namespace Crackboard_VS
                 _rdtCookie = 0;
             }
 
+            _idleTimer?.Dispose();
+
             base.Dispose(disposing);
         }
 
-        // Event handler for document save
         public int OnBeforeSave(uint docCookie)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            _lastActivityTime = DateTime.UtcNow;
             var document = FindDocumentByCookie(docCookie);
             if (document != null)
             {
@@ -85,7 +92,6 @@ namespace Crackboard_VS
             return VSConstants.S_OK;
         }
 
-
         public int OnAfterSave(uint docCookie) => VSConstants.S_OK;
         public int OnAfterAttributeChange(uint docCookie, uint grfAttribs) => VSConstants.S_OK;
         public int OnAfterAttributeChangeEx(uint docCookie, uint grfAttribs, IVsHierarchy pHierOld, uint itemidOld, string pszMkDocumentOld, IVsHierarchy pHierNew, uint itemidNew, string pszMkDocumentNew) => VSConstants.S_OK;
@@ -94,45 +100,49 @@ namespace Crackboard_VS
         public int OnBeforeDocumentWindowShow(uint docCookie, int fFirstShow, IVsWindowFrame pFrame) => VSConstants.S_OK;
         public int OnBeforeLastDocumentUnlock(uint docCookie, uint dwRDTLockType, uint dwReadLocksRemaining, uint dwEditLocksRemaining) => VSConstants.S_OK;
 
-
         private void OnLineChanged(TextPoint startPoint, TextPoint endPoint, int hint)
         {
-            if (_typingTimer == null)
+            ThreadHelper.ThrowIfNotOnUIThread();
+            _lastActivityTime = DateTime.UtcNow;
+
+            string vsLanguage = _dte.ActiveDocument?.Language;
+            string mappedLanguage = ConvertLanguageMapping(vsLanguage);
+
+            if (!string.IsNullOrEmpty(mappedLanguage))
             {
-                _lastHeartbeatTime = DateTime.UtcNow;
+                var now = DateTime.UtcNow;
+                var timeSinceLastHeartbeat = now - _lastHeartbeatTime;
 
-                _typingTimer = new Timer(_ =>
+                if (timeSinceLastHeartbeat.TotalMilliseconds >= HEARTBEAT_INTERVAL)
                 {
-                    Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
-
-                            // Check if 2 minutes have passed since the last heartbeat
-                            
-                            if (DateTime.UtcNow.Subtract(_lastHeartbeatTime).TotalMinutes >= 2)
-                            {
-                                string vsLanguage = _dte.ActiveDocument?.Language;
-                                string mappedLanguage = ConvertLanguageMapping(vsLanguage);
-                                if (!string.IsNullOrEmpty(mappedLanguage))
-                                {
-                                    await SendHeartbeatAsync(mappedLanguage);
-                                    _lastHeartbeatTime = DateTime.UtcNow;  // Update the last heartbeat time
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            // Handle exceptions safely
-                            Console.WriteLine($"Error in Timer callback: {ex.Message}");
-                        }
-                    });
-                }, null, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2));  // Check every 2 minutes
+                    _ = SendHeartbeatAsync(mappedLanguage);
+                }
             }
         }
 
-        // Finds currently open document by cookie
+        private void CheckIdleAndSendHeartbeat(object state)
+        {
+            JoinableTaskFactory.RunAsync(async () =>
+            {
+                await JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                var now = DateTime.UtcNow;
+                var timeSinceLastActivity = now - _lastActivityTime;
+                var timeSinceLastHeartbeat = now - _lastHeartbeatTime;
+
+                if (timeSinceLastActivity.TotalMilliseconds < HEARTBEAT_INTERVAL &&
+                    timeSinceLastHeartbeat.TotalMilliseconds >= HEARTBEAT_INTERVAL)
+                {
+                    string vsLanguage = _dte.ActiveDocument?.Language;
+                    string mappedLanguage = ConvertLanguageMapping(vsLanguage);
+                    if (!string.IsNullOrEmpty(mappedLanguage))
+                    {
+                        await SendHeartbeatAsync(mappedLanguage);
+                    }
+                }
+            });
+        }
+
         private Document FindDocumentByCookie(uint docCookie)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -144,7 +154,6 @@ namespace Crackboard_VS
             });
         }
 
-        // Sends a heartbeat to the Crackboard endpoint
         private async Task SendHeartbeatAsync(string language)
         {
             if (string.IsNullOrEmpty(_sessionKey))
@@ -169,7 +178,7 @@ namespace Crackboard_VS
                     var response = await client.PostAsync(Endpoint, content);
                     if (response.IsSuccessStatusCode)
                     {
-                        _lastHeartbeatTime = DateTime.Now;
+                        _lastHeartbeatTime = DateTime.UtcNow;
                         Console.WriteLine("Heartbeat sent successfully.");
                     }
                     else
@@ -184,14 +193,12 @@ namespace Crackboard_VS
             }
         }
 
-        // Gets the session key from the options page settings
         private string GetSessionKey()
         {
             OptionsPageGrid optionsPage = (OptionsPageGrid)GetDialogPage(typeof(OptionsPageGrid));
             return optionsPage.SessionKey;
         }
 
-        // Dictionary to map common Visual Studio language names to Crackboard (VS Code) language names
         private static readonly Dictionary<string, string> LanguageMapDictionary = new Dictionary<string, string>
         {
             { "CSharp", "csharp" },
@@ -208,8 +215,6 @@ namespace Crackboard_VS
             { "Java", "java" },
         };
 
-        // Converts Visual Studio language names to Crackboard (VS Code) language names
-        // Returns current language as lowercase if no mapping is found
         private string ConvertLanguageMapping(string vsLanguage)
         {
             if (LanguageMapDictionary.TryGetValue(vsLanguage, out string mappedLanguage))
