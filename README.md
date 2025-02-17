@@ -1,3 +1,6 @@
+> [!WARNING]  
+> [crackboard.dev](https://crackboard.dev) has been closed. This repository is no longer maintained.
+
 ![Project Logo](https://i.imgur.com/amzG3uY.png)
 
 [![GitHub license](https://img.shields.io/github/license/danexrc/Crackboard-VS)](https://github.com/danexrc/Crackboard-VS/blob/main/LICENSE)
